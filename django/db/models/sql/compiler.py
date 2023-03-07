@@ -420,6 +420,7 @@ class SQLCompiler:
                 if compiler.get_order_by():
                     raise DatabaseError('ORDER BY not allowed in subqueries of compound statements.')
         parts = ()
+        is_sqlite3 = self.connection.client.executable_name == 'sqlite3'
         for compiler in compilers:
             try:
                 # If the columns list is limited, then all combined queries
@@ -432,7 +433,7 @@ class SQLCompiler:
                         *self.query.annotation_select,
                     ))
                 part_sql, part_args = compiler.as_sql()
-                if combinator == 'union' and not compiler.query.combinator:
+                if not is_sqlite3 and combinator == 'union' and not compiler.query.combinator:
                     part_sql = '({})'.format(part_sql)
                 if compiler.query.combinator:
                     # Wrap in a subquery if wrapping in parentheses isn't
@@ -455,7 +456,7 @@ class SQLCompiler:
         combinator_sql = self.connection.ops.set_operators[combinator]
         if all and combinator == 'union':
             combinator_sql += ' ALL'
-        braces = '({})' if features.supports_slicing_ordering_in_compound and combinator != 'union' else '{}'
+        braces = '({})' if features.supports_slicing_ordering_in_compound and (combinator != 'union' or is_sqlite3) else '{}'
         sql_parts, args_parts = zip(*((braces.format(sql), args) for sql, args in parts))
         result = [' {} '.format(combinator_sql).join(sql_parts)]
         params = []
